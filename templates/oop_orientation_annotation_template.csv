@@ -1,0 +1,2 @@
+annotation_id,image_id,donor_id,patch_id,manual_dominant_orientation_deg,manual_organisation_score,manual_organisation_label,visible_striations_yes_no,manual_sarcomere_length_um_optional,confidence_score,annotator_id,notes
+EXAMPLE_ANNOTATION_ID,EXAMPLE_IMAGE_ID,EXAMPLE_DONOR_ID,EXAMPLE_PATCH_ID,0-180,1-5,disorganised/weak/moderate/strong/high,yes/no,,1-5,EXPERT_ID,Replace example row before annotation

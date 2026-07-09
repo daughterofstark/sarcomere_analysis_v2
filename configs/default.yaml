@@ -1,0 +1,79 @@
+paths:
+  raw_tiff_dir: /Users/medhasharma/Downloads/project/data/raw
+  output_dir: /Users/medhasharma/sarcomere_tools/sarcomere-analysis/results
+
+outputs:
+  manifest_csv: /Users/medhasharma/sarcomere_tools/sarcomere-analysis/results/tables/manifest.csv
+
+calibration:
+  pixel_size_um: 0.1299
+  expected_sarcomere_spacing_um:
+    min: 1.5
+    max: 2.4
+
+filename_pattern:
+  # Example: 2.007-1.tif
+  regex: '^(?P<donor_id>\d+\.\d+)-(?P<region_id>\d+)$'
+
+run:
+  include_extensions:
+    - .tif
+    - .tiff
+  recursive: false
+
+preprocessing:
+  lower_percentile: 1.0
+  upper_percentile: 99.8
+  background_method: gaussian
+  background_sigma_px: 50.0
+  enable_denoise: false
+  denoise_sigma_px: 0.75
+  output_dtype: float32
+  cache_preprocessed: false
+
+masking:
+  tissue_method: otsu
+  tissue_percentile: 35.0
+  min_object_size_px: 256
+  fill_holes: true
+
+patches:
+  patch_size_px: 256
+  stride_px: 128
+  margin_px: 0
+
+qc:
+  min_tissue_fraction: 0.50
+  min_contrast: 0.03
+  min_gradient_energy: 0.0001
+  near_zero_threshold: 0.02
+  saturation_threshold: 0.98
+
+orientation:
+  tensor_sigma_px: 2.0
+  weight_mode: energy_x_coherence
+  min_orientation_weight_sum: 0.001
+  min_orientation_valid_pixels: 64
+  heterogeneity_method: std
+  eps: 1.0e-12
+
+spacing:
+  method: autocorrelation
+  fallback_to_fft: false
+  min_spacing_um: 1.5
+  max_spacing_um: 2.4
+  min_periodicity_confidence: 0.15
+  autocorrelation:
+    profile_bin_px: 1.0
+    min_profile_length_px: 32
+    peak_baseline_percentile: 50.0
+  fft:
+    min_profile_length_px: 32
+    peak_prominence_ratio: 4.0
+
+metadata:
+  healthy_donor_ids:
+    - "4.083"
+    - "5.003"
+    - "6.052"
+    - "7.028"

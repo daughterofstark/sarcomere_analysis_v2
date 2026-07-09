@@ -1,0 +1,34 @@
+# Raw microscopy data and local inputs
+*.tif
+*.tiff
+data/raw/
+raw/
+images/
+
+# Generated outputs
+results/
+!results/README.md
+results/previews/
+results/tables/
+results/provenance/
+results/**/*.npz
+results/**/cache/
+*.npz
+
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Notebooks and scratch
+.ipynb_checkpoints/
+tmp/
+scratch/
+
+# macOS
+.DS_Store

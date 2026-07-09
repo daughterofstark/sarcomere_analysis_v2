@@ -1,0 +1,4 @@
+measurement_id,image_id,donor_id,measurement_type,manual_value,manual_unit,expert_id,region_id,patch_id,x_px,y_px,x0_px,y0_px,x1_px,y1_px,structure_label,notes,measurement_date
+EXAMPLE_001,2.007-1,2.007,oop_manual,0.72,unitless,EXAMPLE_EXPERT,1,,,,,,,,example_orientation_region,EXAMPLE ROW - replace before real validation,YYYY-MM-DD
+EXAMPLE_002,4.083-1,4.083,orientation_manual_deg,35.0,degree,EXAMPLE_EXPERT,1,,,,,,,,example_orientation_axis,EXAMPLE ROW - replace before real validation,YYYY-MM-DD
+EXAMPLE_003,2.007-1,2.007,sarcomere_length_manual_um,1.8,um,EXAMPLE_EXPERT,1,,,,100,100,200,200,example_spacing_region,EXAMPLE ROW - spacing remains exploratory_low_yield,YYYY-MM-DD
