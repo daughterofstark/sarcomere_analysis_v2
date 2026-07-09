@@ -32,7 +32,10 @@ If an existing mask contains FIJI-style value `255`, the UI interprets it as lab
 
 ## Controls
 
-- Left-click drag: paint current label.
+- Mouse wheel: zoom in/out at the cursor.
+- `p`: toggle pan mode.
+- Left-click drag: paint current label when pan mode is off; pan the view when pan mode is on.
+- `r`: reset to full-image view.
 - `1`: set current label to visible Z-disc/striation.
 - `2`: set current label to ignore/uncertain.
 - `0` or `e`: eraser/background.
@@ -46,6 +49,7 @@ If an existing mask contains FIJI-style value `255`, the UI interprets it as lab
 - `h`: print controls.
 
 Masks autosave after each completed mouse stroke.
+Changing label, changing brush size, and saving do not reset the current zoom. Moving to next/previous crop reloads that crop at full view. Brush size is always measured in image pixels, so zooming does not change the actual mask radius.
 
 ## Annotation Rule
 

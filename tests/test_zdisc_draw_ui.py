@@ -9,11 +9,14 @@ from PIL import Image
 import pytest
 
 from sarcomere_analysis.zdisc_draw_ui import (
+    full_image_view,
     headless_check,
     load_draw_index,
     load_mask,
+    pan_view,
     paint_mask,
     save_mask,
+    zoom_view,
     write_progress,
 )
 
@@ -185,3 +188,41 @@ def test_no_production_feature_or_analysis_tables_are_modified(tmp_path: Path) -
 
     assert feature_path.read_bytes() == before_feature
     assert analysis_path.read_bytes() == before_analysis
+
+
+def test_zoom_bounds_calculation_keeps_cursor_centered_zoom() -> None:
+    shape = (100, 200)
+    view = full_image_view(shape)
+
+    zoomed = zoom_view(view.xlim, view.ylim, cursor_x=99.5, cursor_y=49.5, zoom_factor=2.0, image_shape=shape)
+
+    assert zoomed.xlim == (49.5, 149.5)
+    assert zoomed.ylim == (74.5, 24.5)
+
+
+def test_reset_view_returns_full_image_extent() -> None:
+    view = full_image_view((100, 200))
+
+    assert view.xlim == (-0.5, 199.5)
+    assert view.ylim == (99.5, -0.5)
+
+
+def test_pan_offset_changes_view_extent() -> None:
+    shape = (100, 200)
+    zoomed = zoom_view(full_image_view(shape).xlim, full_image_view(shape).ylim, 99.5, 49.5, 2.0, shape)
+
+    panned = pan_view(zoomed.xlim, zoomed.ylim, start_x=80.0, start_y=40.0, current_x=90.0, current_y=45.0, image_shape=shape)
+
+    assert panned.xlim == (39.5, 139.5)
+    assert panned.ylim == (69.5, 19.5)
+
+
+def test_painting_after_zoom_uses_image_coordinates() -> None:
+    mask = np.zeros((100, 100), dtype=np.uint8)
+    _ = zoom_view(full_image_view(mask.shape).xlim, full_image_view(mask.shape).ylim, 50, 50, 4.0, mask.shape)
+
+    painted = paint_mask(mask, x=20, y=30, label=1, radius=1)
+
+    assert painted[30, 20] == 1
+    assert painted[20, 30] == 0
+    assert set(np.unique(painted)).issubset({0, 1, 2})

@@ -30,7 +30,16 @@ class DrawState:
     current_label: int
     brush_radius: int
     is_drawing: bool = False
+    is_panning: bool = False
+    pan_mode: bool = False
+    pan_start: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
     changed: bool = False
+
+
+@dataclass(frozen=True)
+class ViewLimits:
+    xlim: tuple[float, float]
+    ylim: tuple[float, float]
 
 
 def default_zdisc_draw_index_path(cfg: dict[str, Any]) -> Path:
@@ -129,6 +138,96 @@ def paint_mask(mask: np.ndarray, x: float, y: float, label: int, radius: int) ->
     ys, xs = brush_pixel_indices(result.shape, x, y, radius)
     result[ys, xs] = int(label)
     return result
+
+
+def full_image_view(shape: tuple[int, int]) -> ViewLimits:
+    height, width = int(shape[0]), int(shape[1])
+    return ViewLimits(xlim=(-0.5, width - 0.5), ylim=(height - 0.5, -0.5))
+
+
+def zoom_view(
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+    cursor_x: float,
+    cursor_y: float,
+    zoom_factor: float,
+    image_shape: tuple[int, int],
+) -> ViewLimits:
+    factor = float(zoom_factor)
+    if not np.isfinite(factor) or factor <= 0:
+        raise ValueError("zoom_factor must be positive.")
+    x0, x1 = map(float, xlim)
+    y0, y1 = map(float, ylim)
+    cx = float(cursor_x)
+    cy = float(cursor_y)
+    new_width = abs(x1 - x0) / factor
+    new_height = abs(y1 - y0) / factor
+    x_fraction = (cx - x0) / (x1 - x0) if x1 != x0 else 0.5
+    y_fraction = (cy - y0) / (y1 - y0) if y1 != y0 else 0.5
+    new_x0 = cx - x_fraction * new_width
+    new_x1 = new_x0 + new_width
+    new_y0 = cy - y_fraction * (new_height if y1 > y0 else -new_height)
+    new_y1 = new_y0 + (new_height if y1 > y0 else -new_height)
+    return constrain_view((new_x0, new_x1), (new_y0, new_y1), image_shape)
+
+
+def pan_view(
+    start_xlim: tuple[float, float],
+    start_ylim: tuple[float, float],
+    start_x: float,
+    start_y: float,
+    current_x: float,
+    current_y: float,
+    image_shape: tuple[int, int],
+) -> ViewLimits:
+    dx = float(current_x) - float(start_x)
+    dy = float(current_y) - float(start_y)
+    xlim = (float(start_xlim[0]) - dx, float(start_xlim[1]) - dx)
+    ylim = (float(start_ylim[0]) - dy, float(start_ylim[1]) - dy)
+    return constrain_view(xlim, ylim, image_shape)
+
+
+def constrain_view(
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+    image_shape: tuple[int, int],
+) -> ViewLimits:
+    height, width = int(image_shape[0]), int(image_shape[1])
+    full = full_image_view(image_shape)
+    constrained_x = constrain_axis(xlim, lower=-0.5, upper=width - 0.5)
+    constrained_y = constrain_axis(ylim, lower=-0.5, upper=height - 0.5)
+    if axis_span(constrained_x) >= width:
+        constrained_x = full.xlim
+    if axis_span(constrained_y) >= height:
+        constrained_y = full.ylim
+    if ylim[0] > ylim[1] and constrained_y[0] < constrained_y[1]:
+        constrained_y = (constrained_y[1], constrained_y[0])
+    return ViewLimits(xlim=constrained_x, ylim=constrained_y)
+
+
+def constrain_axis(axis: tuple[float, float], lower: float, upper: float) -> tuple[float, float]:
+    a0, a1 = map(float, axis)
+    reversed_axis = a0 > a1
+    low = min(a0, a1)
+    high = max(a0, a1)
+    span = high - low
+    full_span = upper - lower
+    if span >= full_span:
+        low, high = lower, upper
+    else:
+        if low < lower:
+            high += lower - low
+            low = lower
+        if high > upper:
+            low -= high - upper
+            high = upper
+        low = max(low, lower)
+        high = min(high, upper)
+    return (high, low) if reversed_axis else (low, high)
+
+
+def axis_span(axis: tuple[float, float]) -> float:
+    return abs(float(axis[1]) - float(axis[0]))
 
 
 def build_overlay(image: np.ndarray, mask: np.ndarray, alpha: float = 0.45) -> np.ndarray:
@@ -249,19 +348,20 @@ def run_draw_ui(
     brush_size: int = 2,
     alpha: float = 0.45,
     overwrite_progress: bool = False,
+    progress_path: str | Path | None = None,
 ) -> Path:
     import matplotlib.pyplot as plt
 
     index_file = Path(index_path) if index_path else default_zdisc_draw_index_path(cfg)
     index = load_draw_index(index_file)
-    progress_path = default_zdisc_draw_progress_path(cfg)
-    progress = None if overwrite_progress else load_progress(progress_path)
+    progress_file = Path(progress_path) if progress_path else default_zdisc_draw_progress_path(cfg)
+    progress = None if overwrite_progress else load_progress(progress_file)
     state = DrawState(
         position=starting_position(index, start_annotation_id, progress),
         current_label=1,
         brush_radius=max(int(brush_size), 1),
     )
-    current = {"image": None, "mask": None}
+    current = {"image": None, "mask": None, "view": None}
 
     fig, ax = plt.subplots(figsize=(7, 7))
 
@@ -271,25 +371,31 @@ def run_draw_ui(
         mask = load_mask(row["mask_path"], expected_shape=image.shape)
         current["image"] = image
         current["mask"] = mask
+        current["view"] = full_image_view(image.shape)
 
     def save_current(write_overlay: bool = False) -> None:
         row = index.iloc[state.position]
         save_mask(current["mask"], row["mask_path"])
         if write_overlay:
             write_overlay_png(current["image"], current["mask"], row["overlay_path"], alpha=alpha)
-        write_progress(progress_path, index, state.position, state.current_label, state.brush_radius)
+        write_progress(progress_file, index, state.position, state.current_label, state.brush_radius)
         state.changed = False
 
     def draw() -> None:
         row = index.iloc[state.position]
+        previous_view = current["view"]
         ax.clear()
         ax.imshow(build_overlay(current["image"], current["mask"], alpha=alpha))
         ax.axis("off")
         ax.set_title(
             f"{state.position + 1}/{len(index)}  {row['annotation_id']}  image={row['image_id']} patch={row['patch_id']}\n"
-            f"label={state.current_label} ({ZDISC_LABELS[state.current_label]})  brush radius={state.brush_radius}",
+            f"label={state.current_label} ({ZDISC_LABELS[state.current_label]})  brush radius={state.brush_radius}  "
+            f"mode={'pan' if state.pan_mode else 'paint'}",
             fontsize=9,
         )
+        if previous_view is not None:
+            ax.set_xlim(previous_view.xlim)
+            ax.set_ylim(previous_view.ylim)
         fig.canvas.draw_idle()
 
     def paint_event(event: Any) -> None:
@@ -307,17 +413,43 @@ def run_draw_ui(
 
     def on_press(event: Any) -> None:
         if event.button == 1:
-            state.is_drawing = True
-            paint_event(event)
+            if state.pan_mode:
+                state.is_panning = True
+                state.pan_start = (float(event.xdata), float(event.ydata), tuple(ax.get_xlim()), tuple(ax.get_ylim())) if event.xdata is not None and event.ydata is not None else None
+            else:
+                state.is_drawing = True
+                paint_event(event)
 
     def on_motion(event: Any) -> None:
         if state.is_drawing:
             paint_event(event)
+        elif state.is_panning and state.pan_start is not None and event.xdata is not None and event.ydata is not None:
+            start_x, start_y, start_xlim, start_ylim = state.pan_start
+            current["view"] = pan_view(start_xlim, start_ylim, start_x, start_y, event.xdata, event.ydata, current["image"].shape)
+            ax.set_xlim(current["view"].xlim)
+            ax.set_ylim(current["view"].ylim)
+            fig.canvas.draw_idle()
 
     def on_release(event: Any) -> None:
         if event.button == 1 and state.is_drawing:
             state.is_drawing = False
             save_current()
+        elif event.button == 1 and state.is_panning:
+            state.is_panning = False
+            state.pan_start = None
+            write_progress(progress_file, index, state.position, state.current_label, state.brush_radius)
+
+    def on_scroll(event: Any) -> None:
+        if event.inaxes != ax or event.xdata is None or event.ydata is None:
+            return
+        if getattr(event, "button", "") == "up" or getattr(event, "step", 0) > 0:
+            factor = 1.25
+        else:
+            factor = 1.0 / 1.25
+        current["view"] = zoom_view(tuple(ax.get_xlim()), tuple(ax.get_ylim()), event.xdata, event.ydata, factor, current["image"].shape)
+        ax.set_xlim(current["view"].xlim)
+        ax.set_ylim(current["view"].ylim)
+        fig.canvas.draw_idle()
 
     def on_key(event: Any) -> None:
         key = str(event.key or "").lower()
@@ -331,6 +463,10 @@ def run_draw_ui(
             state.brush_radius = max(state.brush_radius - 1, 1)
         elif key == "]":
             state.brush_radius += 1
+        elif key == "p":
+            state.pan_mode = not state.pan_mode
+        elif key == "r":
+            current["view"] = full_image_view(current["image"].shape)
         elif key in {"n", "right"}:
             move(1)
             return
@@ -356,19 +492,21 @@ def run_draw_ui(
 
     print_controls()
     load_current()
-    write_progress(progress_path, index, state.position, state.current_label, state.brush_radius)
+    write_progress(progress_file, index, state.position, state.current_label, state.brush_radius)
     draw()
     fig.canvas.mpl_connect("button_press_event", on_press)
     fig.canvas.mpl_connect("motion_notify_event", on_motion)
     fig.canvas.mpl_connect("button_release_event", on_release)
+    fig.canvas.mpl_connect("scroll_event", on_scroll)
     fig.canvas.mpl_connect("key_press_event", on_key)
     plt.show()
-    return progress_path
+    return progress_file
 
 
 def print_controls() -> None:
     print("Z-disc drawing controls:")
-    print("  Left-click drag: paint current label")
+    print("  Mouse wheel: zoom at cursor; r: reset full view")
+    print("  p: toggle pan mode; left-click drag paints in paint mode or pans in pan mode")
     print("  1: visible Z-disc/striation, 2: ignore/uncertain, 0/e: eraser")
     print("  [ / ]: decrease/increase brush size")
     print("  n/right: next, b/left: previous, s: save, c: clear mask, o: write overlay, q: save and quit, h: help")
