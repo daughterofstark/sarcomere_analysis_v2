@@ -37,6 +37,15 @@ INTERNAL_KEY_COLUMNS = [
     "automated_patch_orientation_deg",
     "health_status",
     "source_image_path",
+    "production_patch_size_px",
+    "requested_expert_crop_size_px",
+    "expert_crop_size_px",
+    "production_patch_x",
+    "production_patch_y",
+    "expert_crop_x0",
+    "expert_crop_y0",
+    "expert_crop_x1",
+    "expert_crop_y1",
 ]
 
 REQUIRED_PATCH_COLUMNS = [
@@ -120,6 +129,7 @@ def export_expert_annotation_pack(
     seed: int = 123,
     max_per_donor: int = 4,
     max_per_image: int = 3,
+    expert_crop_size: int = 128,
     write_zip: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any], dict[str, Path]]:
     patches, images, analysis, manifest = load_expert_pack_inputs(
@@ -131,26 +141,42 @@ def export_expert_annotation_pack(
     )
     _ = images
     candidates = prepare_expert_candidates(patches, analysis=analysis, manifest=manifest)
-    targets = target_counts(n_total=n_total, n_per_bin=n_per_bin)
-    selected, selection_summary = select_expert_patches(
-        candidates,
-        targets=targets,
-        seed=seed,
-        max_per_donor=max_per_donor,
-        max_per_image=max_per_image,
-    )
     out_dir = Path(output_directory) if output_directory else default_expert_pack_dir(cfg)
     patch_dir = out_dir / "patches"
+    targets = target_counts(n_total=n_total, n_per_bin=n_per_bin)
+    existing_key_path = out_dir / "internal_blinding_key.csv"
+    if existing_key_path.exists():
+        selected, selection_summary = selected_from_existing_key(candidates, existing_key_path, targets, max_per_donor, max_per_image)
+    else:
+        selected, selection_summary = select_expert_patches(
+            candidates,
+            targets=targets,
+            seed=seed,
+            max_per_donor=max_per_donor,
+            max_per_image=max_per_image,
+        )
+        selected = assign_anonymous_ids(selected)
     out_dir.mkdir(parents=True, exist_ok=True)
     patch_dir.mkdir(parents=True, exist_ok=True)
-    selected = assign_anonymous_ids(selected)
+    selected = add_context_crop_coordinates(selected, expert_crop_size=expert_crop_size)
     export_blinded_patch_pngs(selected, patch_dir)
     template = expert_template_from_selected(selected)
     internal_key = internal_key_from_selected(selected)
-    summary = expert_pack_summary(selected, candidates, targets, selection_summary, write_zip=write_zip)
-    paths = write_expert_pack_outputs(out_dir, template, internal_key, summary)
+    contact_sheet_path = write_contact_sheet(patch_dir, selected, out_dir / "expert_annotation_contact_sheet.png")
+    summary = expert_pack_summary(
+        selected,
+        candidates,
+        targets,
+        selection_summary,
+        write_zip=write_zip,
+        contact_sheet_written=contact_sheet_path.exists(),
+    )
+    paths = write_expert_pack_outputs(out_dir, template, internal_key, summary, contact_sheet_path)
     if write_zip:
         paths["zip"] = write_expert_pack_zip(out_dir, paths)
+        summary["zip_path"] = str(paths["zip"])
+        paths["summary_json"].write_text(json.dumps(json_safe(summary), indent=2) + "\n", encoding="utf-8")
+        paths["summary_txt"].write_text(render_summary_text(summary), encoding="utf-8")
     return selected, template, internal_key, summary, paths
 
 
@@ -256,6 +282,44 @@ def select_expert_patches(
         "bin_shortfall": shortfall,
         "max_per_donor": int(max_per_donor),
         "max_per_image": int(max_per_image),
+        "selection_source": "fresh_deterministic_selection",
+    }
+
+
+def selected_from_existing_key(
+    candidates: pd.DataFrame,
+    internal_key_path: Path,
+    targets: dict[str, int],
+    max_per_donor: int,
+    max_per_image: int,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    key = pd.read_csv(internal_key_path, dtype={"annotation_id": str, "patch_filename": str, "image_id": str, "donor_id": str, "patch_id": str})
+    require_columns(key, ["annotation_id", "patch_filename", "image_id", "donor_id", "patch_id"], "existing internal blinding key")
+    key_columns = ["annotation_id", "patch_filename", "image_id", "patch_id"]
+    if "oop_bin" in key.columns:
+        key = key.rename(columns={"oop_bin": "oop_bin_existing"})
+        key_columns.append("oop_bin_existing")
+    restored = key[key_columns].merge(
+        candidates,
+        on=["image_id", "patch_id"],
+        how="left",
+        suffixes=("_existing", ""),
+    )
+    missing = restored["donor_id"].isna() if "donor_id" in restored.columns else pd.Series(True, index=restored.index)
+    if missing.any():
+        missing_rows = restored.loc[missing, ["image_id", "patch_id"]].to_dict("records")
+        raise ValueError(f"Existing expert annotation key references patches not found in current candidates: {missing_rows[:10]}")
+    if "oop_bin_existing" in restored.columns:
+        restored["oop_bin"] = restored["oop_bin_existing"].astype(str)
+    selected_by_bin = {name: int((restored["oop_bin"] == name).sum()) for name in targets}
+    shortfall = {bin_name: int(max(targets[bin_name] - selected_by_bin.get(bin_name, 0), 0)) for bin_name in targets}
+    return restored.reset_index(drop=True), {
+        "target_bin_counts": {key_name: int(value) for key_name, value in targets.items()},
+        "selected_bin_counts": selected_by_bin,
+        "bin_shortfall": shortfall,
+        "max_per_donor": int(max_per_donor),
+        "max_per_image": int(max_per_image),
+        "selection_source": "existing_internal_blinding_key",
     }
 
 
@@ -297,14 +361,42 @@ def assign_anonymous_ids(selected: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def add_context_crop_coordinates(selected: pd.DataFrame, expert_crop_size: int = 128) -> pd.DataFrame:
+    if int(expert_crop_size) not in {64, 128, 192}:
+        raise ValueError("expert_crop_size must be one of 64, 128, or 192 pixels.")
+    result = selected.copy(deep=True)
+    for column in ["y0", "x0", "y1", "x1"]:
+        result[column] = pd.to_numeric(result[column], errors="raise").astype(int)
+    result["production_patch_x"] = ((result["x0"] + result["x1"]) / 2.0).round().astype(int)
+    result["production_patch_y"] = ((result["y0"] + result["y1"]) / 2.0).round().astype(int)
+    result["production_patch_size_px"] = np.maximum(result["x1"] - result["x0"], result["y1"] - result["y0"]).astype(int)
+    result["requested_expert_crop_size_px"] = int(expert_crop_size)
+    result["expert_crop_size_px"] = np.where(
+        result["production_patch_size_px"] >= int(expert_crop_size),
+        result["production_patch_size_px"] + int(expert_crop_size),
+        int(expert_crop_size),
+    ).astype(int)
+    # Coordinates are clipped during export once the source image shape is known.
+    result["expert_crop_x0"] = np.nan
+    result["expert_crop_y0"] = np.nan
+    result["expert_crop_x1"] = np.nan
+    result["expert_crop_y1"] = np.nan
+    return result
+
+
 def export_blinded_patch_pngs(selected: pd.DataFrame, patch_dir: Path) -> None:
     image_cache: dict[str, np.ndarray] = {}
-    for _, row in selected.iterrows():
+    for index, row in selected.iterrows():
         image_path = str(row["source_image_path"])
         if image_path not in image_cache:
             image_cache[image_path] = load_tiff(image_path)
         image = image_cache[image_path]
-        crop = crop_patch(image, row)
+        y0, x0, y1, x1 = expert_crop_bounds(row, image.shape)
+        selected.loc[index, "expert_crop_y0"] = y0
+        selected.loc[index, "expert_crop_x0"] = x0
+        selected.loc[index, "expert_crop_y1"] = y1
+        selected.loc[index, "expert_crop_x1"] = x1
+        crop = np.asarray(image[y0:y1, x0:x1])
         write_display_png(crop, patch_dir / str(row["patch_filename"]))
 
 
@@ -312,6 +404,31 @@ def crop_patch(image: np.ndarray, row: pd.Series) -> np.ndarray:
     y0, y1 = int(row["y0"]), int(row["y1"])
     x0, x1 = int(row["x0"]), int(row["x1"])
     return np.asarray(image[max(y0, 0) : min(y1, image.shape[0]), max(x0, 0) : min(x1, image.shape[1])])
+
+
+def expert_crop_bounds(row: pd.Series, image_shape: tuple[int, ...]) -> tuple[int, int, int, int]:
+    height, width = int(image_shape[0]), int(image_shape[1])
+    size = int(row.get("expert_crop_size_px", 128))
+    half = size // 2
+    center_x = int(row.get("production_patch_x", round((int(row["x0"]) + int(row["x1"])) / 2.0)))
+    center_y = int(row.get("production_patch_y", round((int(row["y0"]) + int(row["y1"])) / 2.0)))
+    x0 = center_x - half
+    y0 = center_y - half
+    x1 = x0 + size
+    y1 = y0 + size
+    if x0 < 0:
+        x1 -= x0
+        x0 = 0
+    if y0 < 0:
+        y1 -= y0
+        y0 = 0
+    if x1 > width:
+        x0 = max(0, x0 - (x1 - width))
+        x1 = width
+    if y1 > height:
+        y0 = max(0, y0 - (y1 - height))
+        y1 = height
+    return int(y0), int(x0), int(y1), int(x1)
 
 
 def write_display_png(crop: np.ndarray, path: Path) -> Path:
@@ -332,6 +449,41 @@ def write_display_png(crop: np.ndarray, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(scaled, mode="L").save(path)
     return path
+
+
+def write_contact_sheet(patch_dir: Path, selected: pd.DataFrame, output_path: Path, tile_size: int = 128) -> Path:
+    if selected.empty:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("L", (tile_size, tile_size), color=255).save(output_path)
+        return output_path
+    try:
+        from PIL import ImageDraw, ImageFont
+    except ImportError:  # pragma: no cover - PIL imports are already required by this module.
+        return output_path
+
+    count = int(len(selected))
+    columns = int(np.ceil(np.sqrt(count)))
+    rows = int(np.ceil(count / columns))
+    label_height = 18
+    sheet = Image.new("L", (columns * tile_size, rows * (tile_size + label_height)), color=255)
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default()
+    for idx, row in selected.reset_index(drop=True).iterrows():
+        patch_path = patch_dir / str(row["patch_filename"])
+        if not patch_path.exists():
+            continue
+        patch = Image.open(patch_path).convert("L")
+        patch.thumbnail((tile_size, tile_size))
+        col = idx % columns
+        grid_row = idx // columns
+        x = col * tile_size + (tile_size - patch.width) // 2
+        y = grid_row * (tile_size + label_height)
+        sheet.paste(patch, (x, y))
+        label = str(row["annotation_id"])
+        draw.text((col * tile_size + 4, y + tile_size + 2), label, fill=0, font=font)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(output_path)
+    return output_path
 
 
 def expert_template_from_selected(selected: pd.DataFrame) -> pd.DataFrame:
@@ -357,6 +509,15 @@ def internal_key_from_selected(selected: pd.DataFrame) -> pd.DataFrame:
             "automated_patch_orientation_deg": selected.get("patch_mean_orientation_deg", np.nan),
             "health_status": selected.get("health_status", "unknown"),
             "source_image_path": selected["source_image_path"].astype(str),
+            "production_patch_size_px": selected["production_patch_size_px"],
+            "requested_expert_crop_size_px": selected["requested_expert_crop_size_px"],
+            "expert_crop_size_px": selected["expert_crop_size_px"],
+            "production_patch_x": selected["production_patch_x"],
+            "production_patch_y": selected["production_patch_y"],
+            "expert_crop_x0": selected["expert_crop_x0"],
+            "expert_crop_y0": selected["expert_crop_y0"],
+            "expert_crop_x1": selected["expert_crop_x1"],
+            "expert_crop_y1": selected["expert_crop_y1"],
         }
     )
     return key[INTERNAL_KEY_COLUMNS]
@@ -368,10 +529,14 @@ def expert_pack_summary(
     targets: dict[str, int],
     selection_summary: dict[str, Any],
     write_zip: bool = False,
+    contact_sheet_written: bool = False,
 ) -> dict[str, Any]:
     bin_counts = value_counts(selected["oop_bin"]) if len(selected) else {}
     donor_counts = selected["donor_id"].value_counts() if len(selected) else pd.Series(dtype=int)
     image_counts = selected["image_id"].value_counts() if len(selected) else pd.Series(dtype=int)
+    production_sizes = pd.to_numeric(selected.get("production_patch_size_px", pd.Series(dtype=float)), errors="coerce").dropna()
+    requested_sizes = pd.to_numeric(selected.get("requested_expert_crop_size_px", pd.Series(dtype=float)), errors="coerce").dropna()
+    expert_sizes = pd.to_numeric(selected.get("expert_crop_size_px", pd.Series(dtype=float)), errors="coerce").dropna()
     return json_safe(
         {
             "mode": "blinded_expert_annotation_pack",
@@ -386,6 +551,11 @@ def expert_pack_summary(
             "max_patches_per_image": int(image_counts.max()) if len(image_counts) else 0,
             "donor_cap": int(selection_summary["max_per_donor"]),
             "image_cap": int(selection_summary["max_per_image"]),
+            "selection_source": selection_summary.get("selection_source", "unknown"),
+            "production_patch_size_px": int(production_sizes.median()) if len(production_sizes) else None,
+            "requested_expert_crop_size_px": int(requested_sizes.median()) if len(requested_sizes) else None,
+            "expert_crop_size_px": int(expert_sizes.median()) if len(expert_sizes) else None,
+            "contact_sheet_written": bool(contact_sheet_written),
             "anonymous_filenames": True,
             "expert_template_blinded": True,
             "internal_key_for_project_team_only": True,
@@ -396,12 +566,19 @@ def expert_pack_summary(
     )
 
 
-def write_expert_pack_outputs(out_dir: Path, template: pd.DataFrame, internal_key: pd.DataFrame, summary: dict[str, Any]) -> dict[str, Path]:
+def write_expert_pack_outputs(
+    out_dir: Path,
+    template: pd.DataFrame,
+    internal_key: pd.DataFrame,
+    summary: dict[str, Any],
+    contact_sheet_path: Path,
+) -> dict[str, Path]:
     paths = {
         "patch_dir": out_dir / "patches",
         "template_csv": out_dir / "expert_annotation_template.csv",
         "internal_key_csv": out_dir / "internal_blinding_key.csv",
         "instructions_md": out_dir / "annotation_instructions.md",
+        "contact_sheet_png": contact_sheet_path,
         "summary_json": out_dir / "expert_annotation_pack_summary.json",
         "summary_txt": out_dir / "expert_annotation_pack_summary.txt",
     }
@@ -423,6 +600,12 @@ def render_summary_text(summary: dict[str, Any]) -> str:
         f"unique_images: {summary['unique_images']}",
         f"max_patches_per_donor: {summary['max_patches_per_donor']}",
         f"max_patches_per_image: {summary['max_patches_per_image']}",
+        f"production_patch_size_px: {summary.get('production_patch_size_px')}",
+        f"requested_expert_crop_size_px: {summary.get('requested_expert_crop_size_px')}",
+        f"expert_crop_size_px: {summary.get('expert_crop_size_px')}",
+        f"contact_sheet_written: {summary.get('contact_sheet_written')}",
+        f"zip_path: {summary.get('zip_path')}",
+        f"zip_excludes_internal_key: {summary.get('zip_excludes_internal_key')}",
         "Expert-facing files contain anonymous patch IDs only.",
         "Internal blinding key is for the project team only and must not be sent to the reviewer.",
     ]
@@ -435,6 +618,7 @@ def write_expert_pack_zip(out_dir: Path, paths: dict[str, Path]) -> Path:
         paths["template_csv"],
         paths["instructions_md"],
         paths["summary_txt"],
+        paths["contact_sheet_png"],
     ]
     with ZipFile(zip_path, "w", ZIP_DEFLATED) as archive:
         for patch in sorted((out_dir / "patches").glob("*.png")):

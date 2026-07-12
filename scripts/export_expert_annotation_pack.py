@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--max-per-donor", type=int, default=4)
     parser.add_argument("--max-per-image", type=int, default=3)
+    parser.add_argument("--expert-crop-size", type=int, default=128, choices=[64, 128, 192])
     parser.add_argument("--write-zip", action="store_true")
     args = parser.parse_args()
 
@@ -39,6 +40,7 @@ def main() -> None:
         seed=args.seed,
         max_per_donor=args.max_per_donor,
         max_per_image=args.max_per_image,
+        expert_crop_size=args.expert_crop_size,
         write_zip=args.write_zip,
     )
 
@@ -49,9 +51,14 @@ def main() -> None:
     print(f"unique_images: {summary['unique_images']}")
     print(f"max_patches_per_donor: {summary['max_patches_per_donor']}")
     print(f"max_patches_per_image: {summary['max_patches_per_image']}")
+    print(f"production_patch_size_px: {summary['production_patch_size_px']}")
+    print(f"requested_expert_crop_size_px: {summary['requested_expert_crop_size_px']}")
+    print(f"expert_crop_size_px: {summary['expert_crop_size_px']}")
+    print(f"contact_sheet_written: {summary['contact_sheet_written']}")
     print(f"template_csv: {paths['template_csv']}")
     print(f"internal_key_csv: {paths['internal_key_csv']}")
     print(f"instructions_md: {paths['instructions_md']}")
+    print(f"contact_sheet_png: {paths['contact_sheet_png']}")
     print(f"summary_json: {paths['summary_json']}")
     print(f"summary_txt: {paths['summary_txt']}")
     print(f"patch_dir: {paths['patch_dir']}")

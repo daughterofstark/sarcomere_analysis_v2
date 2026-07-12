@@ -6,10 +6,12 @@ from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
+from PIL import Image
 import tifffile
 
 from sarcomere_analysis.expert_annotation_pack import (
     EXPERT_TEMPLATE_COLUMNS,
+    expert_crop_bounds,
     export_expert_annotation_pack,
     prepare_expert_candidates,
     select_expert_patches,
@@ -133,8 +135,64 @@ def test_internal_blinding_key_contains_mapping_metadata(tmp_path: Path) -> None
     write_input_tables(tmp_path)
     _, _, internal_key, _, _ = export_expert_annotation_pack(pack_config(tmp_path), n_total=12, seed=4, max_per_donor=2, max_per_image=2)
 
-    for column in ["image_id", "donor_id", "patch_id", "oop_bin", "automated_patch_oop", "health_status"]:
+    for column in [
+        "image_id",
+        "donor_id",
+        "patch_id",
+        "oop_bin",
+        "automated_patch_oop",
+        "health_status",
+        "production_patch_size_px",
+        "requested_expert_crop_size_px",
+        "expert_crop_size_px",
+        "production_patch_x",
+        "production_patch_y",
+        "expert_crop_x0",
+        "expert_crop_y0",
+        "expert_crop_x1",
+        "expert_crop_y1",
+    ]:
         assert column in internal_key.columns
+
+
+def test_expert_crop_size_can_be_larger_than_production_patch(tmp_path: Path) -> None:
+    write_input_tables(tmp_path)
+    _, template, internal_key, _, paths = export_expert_annotation_pack(
+        pack_config(tmp_path),
+        n_total=12,
+        seed=4,
+        max_per_donor=2,
+        max_per_image=2,
+        expert_crop_size=64,
+    )
+    first_png = paths["patch_dir"] / str(template.loc[0, "patch_filename"])
+    image = Image.open(first_png)
+
+    assert int(internal_key["production_patch_size_px"].max()) == 32
+    assert int(internal_key["expert_crop_size_px"].min()) == 64
+    assert max(image.size) >= 64
+
+
+def test_crop_clips_safely_at_image_boundaries() -> None:
+    row = pd.Series({"production_patch_x": 2, "production_patch_y": 2, "expert_crop_size_px": 64, "x0": 0, "x1": 32, "y0": 0, "y1": 32})
+
+    y0, x0, y1, x1 = expert_crop_bounds(row, (40, 50))
+
+    assert (y0, x0) == (0, 0)
+    assert y1 <= 40
+    assert x1 <= 50
+    assert y1 > y0
+    assert x1 > x0
+
+
+def test_existing_patch_id_internal_mapping_is_preserved(tmp_path: Path) -> None:
+    write_input_tables(tmp_path)
+    _, _, first_key, _, _ = export_expert_annotation_pack(pack_config(tmp_path), n_total=12, seed=4, max_per_donor=2, max_per_image=2)
+
+    _, _, second_key, _, _ = export_expert_annotation_pack(pack_config(tmp_path), n_total=12, seed=99, max_per_donor=2, max_per_image=2)
+
+    pd.testing.assert_series_equal(first_key["annotation_id"], second_key["annotation_id"])
+    pd.testing.assert_series_equal(first_key["patch_id"], second_key["patch_id"])
 
 
 def test_exported_patch_filenames_are_anonymous(tmp_path: Path) -> None:
@@ -173,7 +231,16 @@ def test_zip_excludes_internal_blinding_key(tmp_path: Path) -> None:
     assert "internal_blinding_key.csv" not in names
     assert "expert_annotation_template.csv" in names
     assert "annotation_instructions.md" in names
+    assert "expert_annotation_contact_sheet.png" in names
     assert any(name.startswith("patches/EXPERT_") for name in names)
+
+
+def test_contact_sheet_is_written(tmp_path: Path) -> None:
+    write_input_tables(tmp_path)
+    _, _, _, summary, paths = export_expert_annotation_pack(pack_config(tmp_path), n_total=12, seed=4, max_per_donor=2, max_per_image=2)
+
+    assert paths["contact_sheet_png"].exists()
+    assert summary["contact_sheet_written"] is True
 
 
 def test_summary_json_is_serializable(tmp_path: Path) -> None:

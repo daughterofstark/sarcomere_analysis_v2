@@ -20,6 +20,7 @@ Optional:
   --seed 123 \
   --max-per-donor 4 \
   --max-per-image 3 \
+  --expert-crop-size 128 \
   --write-zip
 ```
 
@@ -37,6 +38,7 @@ Expert-facing files:
 - `expert_annotation_template.csv`
 - `annotation_instructions.md`
 - `expert_annotation_pack_summary.txt`
+- `expert_annotation_contact_sheet.png`
 - optional `expert_annotation_pack_for_natalia.zip`
 
 Internal-only file:
@@ -44,6 +46,8 @@ Internal-only file:
 - `internal_blinding_key.csv`
 
 Do not send `internal_blinding_key.csv` to Natalia or any blinded reviewer. It contains image IDs, donor IDs, patch IDs, automated OOP bins, automated OOP values, and source paths.
+
+The zip file is built for blinded review. It includes only the anonymous patch PNGs, the expert-facing annotation template, the instruction sheet, the summary text, and the contact sheet. It excludes the internal blinding key and JSON metadata.
 
 ## Scoring Fields
 
@@ -85,6 +89,46 @@ The bins are quantile-based from automated patch OOP. The exporter includes only
 - max 3 patches per image
 
 If exact balance is impossible under these constraints, the exporter records the shortfall in the summary.
+
+## Expert Context Crops
+
+The production patch remains the validation unit through `patch_id`, but the exported PNG can include more local image context for human review.
+
+Default expert crop size:
+
+```text
+128 px
+```
+
+Supported crop sizes:
+
+```text
+64, 128, 192
+```
+
+The expert crop is centered on the original production patch center and clipped safely at image boundaries. If the production patch is already larger than the requested expert crop size, the exporter treats the requested size as extra context and uses a larger effective crop so the expert-facing PNG is not smaller than the production validation unit.
+
+The internal key records:
+
+- production patch size
+- requested expert crop size
+- effective expert crop size
+- production patch center
+- expert crop coordinates
+
+These coordinates are internal only and are not included in the expert-facing template.
+
+If an `internal_blinding_key.csv` already exists, the exporter reuses the existing `annotation_id` and `patch_id` mapping by default and regenerates the anonymous PNGs/contact sheet. This preserves the blinded selected patch set while improving the visual export.
+
+## Contact Sheet
+
+The exporter writes:
+
+```text
+results/expert_annotation_pack/expert_annotation_contact_sheet.png
+```
+
+Each tile is labeled only by anonymous `annotation_id`. No donor, image, OOP bin, health status, or automated metric is shown.
 
 ## Later Use
 
