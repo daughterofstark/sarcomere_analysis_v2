@@ -68,6 +68,33 @@ def write_report_summaries(tmp_path: Path) -> None:
         },
     )
     write_json(
+        validation / "expert_crop_feature_audit" / "expert_crop_feature_audit_summary.json",
+        {
+            "previous_production_patch_oop_vs_organisation": {
+                "computed": True,
+                "n": 51,
+                "rho": 0.0124,
+                "p_value": 0.931,
+            },
+            "crop_oop_vs_organisation": {
+                "computed": True,
+                "n": 51,
+                "rho": -0.3099,
+                "p_value": 0.0269,
+            },
+            "crop_oop_vs_organisation_confidence_filtered": {
+                "computed": True,
+                "n": 41,
+                "rho": -0.2707,
+                "p_value": 0.0869,
+            },
+            "top_organisation_features_by_abs_spearman": [
+                {"feature": "crop_oop", "spearman_rho": -0.3099},
+                {"feature": "crop_intensity_std", "spearman_rho": 0.2967},
+            ],
+        },
+    )
+    write_json(
         validation / "full_image_patch_mask_validation_summary.json",
         {
             "total_automated_patches_in_annotated_images": 2700,
@@ -93,6 +120,8 @@ def test_report_handles_missing_optional_summaries(tmp_path: Path) -> None:
 
     assert report["synthetic_oop_implementation_validation"]["status"] == "missing"
     assert report["source_summary_presence"]["expert_annotation"] is False
+    assert report["source_summary_presence"]["expert_crop_feature_audit"] is False
+    assert report["region_alignment_audit"]["status"] == "missing"
     assert report["final_interpretation"]["real_tissue_oop_as_expert_organisation_endpoint"] == "not_validated"
 
 
@@ -116,6 +145,24 @@ def test_report_includes_expert_annotation_negative_validation(tmp_path: Path) -
     assert report["final_interpretation"]["real_tissue_oop_as_expert_organisation_endpoint"] == "not_validated"
 
 
+def test_report_includes_expert_visible_crop_audit(tmp_path: Path) -> None:
+    write_report_summaries(tmp_path)
+    report = build_final_validation_report(report_config(tmp_path))
+
+    region = report["region_alignment_audit"]
+    assert region["status"] == "completed"
+    assert region["previous_production_patch_oop_vs_organisation"]["rho"] == 0.0124
+    assert region["expert_visible_crop_oop_vs_organisation"]["rho"] == -0.3099
+
+
+def test_report_records_inverse_crop_oop_association(tmp_path: Path) -> None:
+    write_report_summaries(tmp_path)
+    report = build_final_validation_report(report_config(tmp_path))
+
+    assert report["region_alignment_audit"]["expert_visible_crop_oop_vs_organisation"]["rho"] < 0
+    assert report["final_interpretation"]["expert_visible_crop_oop_as_expert_organisation_endpoint"] == "inversely_associated_not_validated"
+
+
 def test_report_includes_spacing_exploratory_low_yield(tmp_path: Path) -> None:
     write_report_summaries(tmp_path)
     report = build_final_validation_report(report_config(tmp_path))
@@ -131,7 +178,9 @@ def test_report_includes_allowed_and_not_allowed_claims(tmp_path: Path) -> None:
     report = build_final_validation_report(report_config(tmp_path))
 
     assert any("pipeline processes" in claim for claim in report["claims_allowed"])
+    assert any("region definition affects feature relationships" in claim for claim in report["claims_allowed"])
     assert any("OOP is validated as expert-rated" in claim for claim in report["claims_not_allowed"])
+    assert any("Crop OOP validates expert organisation" in claim for claim in report["claims_not_allowed"])
 
 
 def test_output_json_serializable(tmp_path: Path) -> None:

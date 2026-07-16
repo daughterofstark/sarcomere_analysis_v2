@@ -42,6 +42,9 @@ def build_final_validation_report(cfg: dict[str, Any]) -> dict[str, Any]:
         "synthetic_oop": read_json(validation_dir / "synthetic_oop_validation_summary.json"),
         "expert_annotation": read_json(validation_dir / "expert_annotation_validation" / "expert_annotation_validation_summary.json"),
         "expert_feature_audit": read_json(validation_dir / "expert_feature_audit" / "expert_feature_audit_summary.json"),
+        "expert_crop_feature_audit": read_json(
+            validation_dir / "expert_crop_feature_audit" / "expert_crop_feature_audit_summary.json"
+        ),
         "full_image_patch_mask": read_json(validation_dir / "full_image_patch_mask_validation_summary.json"),
         "full_image_zdisc_mask": read_json(validation_dir / "full_image_zdisc_mask_validation_summary.json"),
         "crop_zdisc_mask": read_json(validation_dir / "zdisc_mask_validation_summary.json"),
@@ -54,6 +57,7 @@ def build_final_validation_report(cfg: dict[str, Any]) -> dict[str, Any]:
         "sarcgraph_zdisc_detection_interpretation": sarcgraph_interpretation(sources),
         "synthetic_oop_implementation_validation": synthetic_oop_section(sources),
         "manual_expert_validation_summary": manual_expert_section(sources),
+        "region_alignment_audit": region_alignment_section(sources),
         "final_interpretation": final_interpretation_section(),
         "recommended_next_directions": recommended_next_directions(),
         "claims_allowed": claims_allowed(),
@@ -169,12 +173,39 @@ def manual_expert_section(sources: dict[str, dict[str, Any] | None]) -> dict[str
     }
 
 
+def region_alignment_section(sources: dict[str, dict[str, Any] | None]) -> dict[str, Any]:
+    crop_audit = sources.get("expert_crop_feature_audit") or {}
+    previous = crop_audit.get("previous_production_patch_oop_vs_organisation") or {}
+    crop = crop_audit.get("crop_oop_vs_organisation") or {}
+    confidence_filtered = crop_audit.get("crop_oop_vs_organisation_confidence_filtered") or {}
+    return {
+        "status": "completed" if crop_audit else "missing",
+        "rationale": "Natalia scored larger expert-visible crops, while the first expert audit used automated features from the internal production patch.",
+        "previous_production_patch_oop_vs_organisation": previous,
+        "expert_visible_crop_oop_vs_organisation": crop,
+        "expert_visible_crop_oop_vs_organisation_confidence_filtered": confidence_filtered,
+        "top_crop_organisation_features": (crop_audit.get("top_organisation_features_by_abs_spearman") or [])[:5],
+        "top_confidence_filtered_crop_organisation_features": (
+            crop_audit.get("top_confidence_filtered_organisation_features_by_abs_spearman") or []
+        )[:5],
+        "interpretation": (
+            "Region definition affected feature relationships, but expert-visible crop OOP was inversely associated with "
+            "expert organisation score and therefore still does not validate OOP as Natalia-rated organisation."
+            if crop_audit
+            else "Expert-visible crop feature audit not available."
+        ),
+    }
+
+
 def final_interpretation_section() -> dict[str, str]:
     return {
         "oop_orientation_implementation": "validated_on_synthetic_controlled_data",
+        "production_patch_oop_as_expert_organisation_endpoint": "not_validated",
+        "expert_visible_crop_oop_as_expert_organisation_endpoint": "inversely_associated_not_validated",
         "real_tissue_oop_as_expert_organisation_endpoint": "not_validated",
         "striation_visibility": "weakly_reflected_by_oop",
         "sarcomere_spacing": "not_validated_exploratory_low_yield",
+        "classical_descriptors": "may_capture_texture_anisotropy_or_visibility_but_not_natalia_biological_organisation_score",
         "automated_current_pipeline": (
             "useful_as_reproducible_image_texture_orientation_audit_not_yet_validated_biological_organisation_biomarker"
         ),
@@ -199,6 +230,8 @@ def claims_allowed() -> list[str]:
         "Spacing is low-yield in this dataset.",
         "Synthetic OOP validation passes on controlled striated images.",
         "Expert validation does not support OOP as a standalone organisation score.",
+        "Expert-visible crop audit showed region definition affects feature relationships.",
+        "Crop intensity and texture features may be worth monitoring exploratorily.",
         "Widefield archival images are challenging for object-level sarcomere analysis.",
     ]
 
@@ -208,6 +241,9 @@ def claims_not_allowed() -> list[str]:
         "OOP is validated as expert-rated sarcomere organisation.",
         "Disease/healthy differences are biologically meaningful based on OOP.",
         "Sarcomere length can be robustly measured from this dataset.",
+        "Crop OOP validates expert organisation.",
+        "The inverse crop OOP association should be interpreted biologically without further validation.",
+        "Current widefield OOP supports disease/healthy biological comparisons.",
         "SarcGraph failed because of implementation error.",
     ]
 
@@ -236,12 +272,19 @@ def write_final_validation_report_outputs(report: dict[str, Any], paths: dict[st
 
 
 def render_text_report(report: dict[str, Any]) -> str:
+    region = report["region_alignment_audit"]
     lines = [
         "Final Validation Interpretation",
         "",
         f"Images: {report['dataset_and_pipeline_status'].get('images')}",
         f"Donors: {report['dataset_and_pipeline_status'].get('donors')}",
         f"Patch rows: {report['dataset_and_pipeline_status'].get('patch_rows')}",
+        "",
+        "Region-alignment audit:",
+        f"- previous production-patch OOP vs organisation: {region.get('previous_production_patch_oop_vs_organisation')}",
+        f"- expert-visible crop OOP vs organisation: {region.get('expert_visible_crop_oop_vs_organisation')}",
+        f"- confidence-filtered crop OOP vs organisation: {region.get('expert_visible_crop_oop_vs_organisation_confidence_filtered')}",
+        f"- interpretation: {region.get('interpretation')}",
         "",
         "Final interpretation:",
     ]
@@ -259,6 +302,7 @@ def render_markdown_report(report: dict[str, Any]) -> str:
     sarcgraph = report["sarcgraph_zdisc_detection_interpretation"]
     synthetic = report["synthetic_oop_implementation_validation"]
     manual = report["manual_expert_validation_summary"]
+    region = report["region_alignment_audit"]
     final = report["final_interpretation"]
     lines = [
         "# Final Validation Interpretation",
@@ -310,16 +354,24 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             "- Manual sarcomere length was not completed; spacing was not validated.",
             f"- Feature audit: {manual['expert_feature_audit']['interpretation']}",
             "",
-            "## 5. Final Interpretation",
+            "## 5. Region-Alignment Audit",
+            "",
+            f"- Rationale: {region['rationale']}",
+            f"- Previous production-patch OOP vs organisation: {format_value(region.get('previous_production_patch_oop_vs_organisation'))}",
+            f"- Expert-visible crop OOP vs organisation: {format_value(region.get('expert_visible_crop_oop_vs_organisation'))}",
+            f"- Confidence-filtered crop OOP vs organisation: {format_value(region.get('expert_visible_crop_oop_vs_organisation_confidence_filtered'))}",
+            f"- Interpretation: {region['interpretation']}",
+            "",
+            "## 6. Final Interpretation",
             "",
         ]
     )
     lines.extend(f"- {key}: `{value}`" for key, value in final.items())
-    lines.extend(["", "## 6. Recommended Next Directions", ""])
+    lines.extend(["", "## 7. Recommended Next Directions", ""])
     lines.extend(f"- {item}" for item in report["recommended_next_directions"])
-    lines.extend(["", "## 7. Claims Allowed", ""])
+    lines.extend(["", "## 8. Claims Allowed", ""])
     lines.extend(f"- {claim}" for claim in report["claims_allowed"])
-    lines.extend(["", "## 8. Claims Not Allowed", ""])
+    lines.extend(["", "## 9. Claims Not Allowed", ""])
     lines.extend(f"- {claim}" for claim in report["claims_not_allowed"])
     lines.append("")
     return "\n".join(lines)

@@ -46,15 +46,26 @@ Object-level Z-disc detection and sarcomere spacing are not the right primary ro
 - Manual sarcomere length was not completed; spacing was not validated.
 - Feature audit: No existing automated patch feature strongly tracked expert organisation score in this small single-reviewer audit.
 
-## 5. Final Interpretation
+## 5. Region-Alignment Audit
+
+- Rationale: Natalia scored larger expert-visible crops, while the first expert audit used automated features from the internal production patch.
+- Previous production-patch OOP vs organisation: {'computed': True, 'reason': 'computed', 'n': 51, 'rho': 0.01242829969906075, 'p_value': 0.9310222638650707}
+- Expert-visible crop OOP vs organisation: {'computed': True, 'reason': 'computed', 'n': 51, 'rho': -0.3098948728808109, 'p_value': 0.026896219099682064}
+- Confidence-filtered crop OOP vs organisation: {'computed': True, 'reason': 'computed', 'n': 41, 'rho': -0.27070386090516635, 'p_value': 0.08692008666271361}
+- Interpretation: Region definition affected feature relationships, but expert-visible crop OOP was inversely associated with expert organisation score and therefore still does not validate OOP as Natalia-rated organisation.
+
+## 6. Final Interpretation
 
 - oop_orientation_implementation: `validated_on_synthetic_controlled_data`
+- production_patch_oop_as_expert_organisation_endpoint: `not_validated`
+- expert_visible_crop_oop_as_expert_organisation_endpoint: `inversely_associated_not_validated`
 - real_tissue_oop_as_expert_organisation_endpoint: `not_validated`
 - striation_visibility: `weakly_reflected_by_oop`
 - sarcomere_spacing: `not_validated_exploratory_low_yield`
+- classical_descriptors: `may_capture_texture_anisotropy_or_visibility_but_not_natalia_biological_organisation_score`
 - automated_current_pipeline: `useful_as_reproducible_image_texture_orientation_audit_not_yet_validated_biological_organisation_biomarker`
 
-## 6. Recommended Next Directions
+## 7. Recommended Next Directions
 
 - If biological organisation quantification remains the goal, collect a higher-quality confocal subset.
 - Repeat the same blinded annotation framework on confocal images.
@@ -64,17 +75,22 @@ Object-level Z-disc detection and sarcomere spacing are not the right primary ro
 - Emphasise reproducibility, auditability, and honest endpoint triage.
 - Do not continue tuning OOP or spacing on the current data without new validation evidence.
 
-## 7. Claims Allowed
+## 8. Claims Allowed
 
 - The pipeline processes the full dataset reproducibly.
 - Spacing is low-yield in this dataset.
 - Synthetic OOP validation passes on controlled striated images.
 - Expert validation does not support OOP as a standalone organisation score.
+- Expert-visible crop audit showed region definition affects feature relationships.
+- Crop intensity and texture features may be worth monitoring exploratorily.
 - Widefield archival images are challenging for object-level sarcomere analysis.
 
-## 8. Claims Not Allowed
+## 9. Claims Not Allowed
 
 - OOP is validated as expert-rated sarcomere organisation.
 - Disease/healthy differences are biologically meaningful based on OOP.
 - Sarcomere length can be robustly measured from this dataset.
+- Crop OOP validates expert organisation.
+- The inverse crop OOP association should be interpreted biologically without further validation.
+- Current widefield OOP supports disease/healthy biological comparisons.
 - SarcGraph failed because of implementation error.
