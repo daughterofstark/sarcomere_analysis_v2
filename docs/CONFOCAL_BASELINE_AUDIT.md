@@ -9,7 +9,7 @@ The goal is to answer a practical question before building anything new: do the 
 Default confocal root:
 
 ```text
-/Users/medhasharma/sarcomere_tools/Confocal
+/path/to/local/confocal
 ```
 
 Supported files:
@@ -27,7 +27,7 @@ TIFF microscopy formats are preferred when available.
 ```bash
 ../sarcgraph-env/bin/python scripts/run_confocal_baseline_audit.py \
   --config configs/default.yaml \
-  --confocal-root /Users/medhasharma/sarcomere_tools/Confocal \
+  --confocal-root /path/to/local/confocal \
   --write-previews
 ```
 

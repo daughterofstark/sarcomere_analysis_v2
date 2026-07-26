@@ -1,10 +1,12 @@
 # Sarcomere Analysis
 
-Minimal classical image-analysis pipeline for archival human myocardium TIFFs.
+Classical image-analysis tools for sarcomeric organisation audits in myocardium microscopy images.
 
-Current scope: manifest/IO, preprocessing, tissue mask/QC, patch grid, structure-tensor orientation/OOP, conservative spacing scaffold, standardized outputs, provenance, single-image CLI, batch CLI, schema locks, and smoke tests.
+This repository contains code, tests, and documentation only. Raw microscopy images and generated analysis results are intentionally not included.
 
-Not implemented: FIJI validation, benchmarking, clinical/statistical inference, ML, cell segmentation, or publication figures.
+Current scope includes widefield preprocessing/QC/orientation/OOP, exploratory spacing scaffolds, confocal pilot selected-region audits, metadata/provenance helpers, annotation-pack utilities, and validation-status reporting.
+
+Not included: raw image data, generated result tables/previews/review zips, clinical/statistical inference, ML, cell segmentation, or publication figures.
 
 ## Start Here
 
@@ -12,13 +14,36 @@ Not implemented: FIJI validation, benchmarking, clinical/statistical inference, 
 - [Runbook](docs/RUNBOOK.md)
 - [Run classical pipeline](docs/RUN_CLASSICAL_PIPELINE.md)
 - [Metric definitions](docs/metric_definitions.md)
+- [Data availability and sharing](docs/DATA_AVAILABILITY_AND_SHARING.md)
+- [Share-ready audit](docs/SHARE_READY_AUDIT.md)
 - [Next Codex prompts](docs/NEXT_CODEX_PROMPTS.md)
+
+## Data And Paths
+
+Raw microscopy images are external local inputs. Set local paths in a private config copy or pass CLI overrides such as `--image-dir` or `--confocal-root`.
+
+The default config uses share-safe placeholders/relative outputs:
+
+- widefield input placeholder: `/path/to/local/widefield/raw`
+- generated outputs: `results/`
+
+Do not commit raw image files, generated `results/`, review-pack zip files, or local environment folders.
+
+## Analysis Status
+
+Widefield and confocal workflows are separate.
+
+- Widefield: production measurement pipeline is frozen; spacing was low-yield and remains exploratory.
+- Confocal pilot: selected-region OOP/coherence and calibrated spacing were promising in visually reviewed regions, but remain exploratory/manual-review-dependent.
+
+No clinical, disease-comparison, or biological claims are made from this repository alone.
 
 ## Common Commands
 
 ```bash
 ../sarcgraph-env/bin/python -m pytest
 PYTHON=../sarcgraph-env/bin/python bash scripts/dev_smoke.sh
+../sarcgraph-env/bin/python scripts/build_manifest.py --config configs/default.yaml --image-dir /path/to/local/widefield/raw
 ../sarcgraph-env/bin/python scripts/run_image_metrics.py --config configs/default.yaml --image-id 2.007-1 --write-all
 ../sarcgraph-env/bin/python scripts/run_batch_metrics.py --config configs/default.yaml --write-tables --write-provenance --continue-on-error
 ../sarcgraph-env/bin/python scripts/audit_batch_outputs.py --config configs/default.yaml

@@ -4,7 +4,7 @@ This scaffold prepares local crop images and editable mask PNGs for manual marki
 
 ## Prepare The Set
 
-From `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`:
+From `<repo-root>`:
 
 ```bash
 ../sarcgraph-env/bin/python scripts/prepare_zdisc_annotation_set.py \

@@ -4,7 +4,7 @@ This scaffold prepares selected full-image PNG working copies for local manual Z
 
 ## Prepare Full Images
 
-From `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`:
+From `<repo-root>`:
 
 ```bash
 ../sarcgraph-env/bin/python scripts/prepare_full_image_zdisc_annotation_set.py \

@@ -1,6 +1,6 @@
 # Today Handoff
 
-Project path: `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`
+Project path: `<repo-root>`
 
 ## Current Status
 

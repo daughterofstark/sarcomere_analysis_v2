@@ -1,9 +1,9 @@
 paths:
-  raw_tiff_dir: /Users/medhasharma/Downloads/project/data/raw
-  output_dir: /Users/medhasharma/sarcomere_tools/sarcomere-analysis/results
+  raw_tiff_dir: /path/to/local/widefield/raw
+  output_dir: results
 
 outputs:
-  manifest_csv: /Users/medhasharma/sarcomere_tools/sarcomere-analysis/results/tables/manifest.csv
+  manifest_csv: results/tables/manifest.csv
 
 calibration:
   pixel_size_um: 0.1299

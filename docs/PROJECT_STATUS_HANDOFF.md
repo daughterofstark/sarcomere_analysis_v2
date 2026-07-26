@@ -2,7 +2,7 @@
 
 Generated: `2026-07-09T14:40:53.353379+00:00`
 
-Project path: `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`
+Project path: `<repo-root>`
 
 Test status recorded: `178 passed`
 

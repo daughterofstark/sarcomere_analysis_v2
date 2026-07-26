@@ -4,7 +4,7 @@ This tool lets you draw Z-disc/striation masks directly on the local crop images
 
 ## Start The UI
 
-From `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`:
+From `<repo-root>`:
 
 ```bash
 ../sarcgraph-env/bin/python scripts/draw_zdisc_annotations.py --config configs/default.yaml

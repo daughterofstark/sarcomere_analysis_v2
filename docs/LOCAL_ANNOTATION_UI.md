@@ -4,7 +4,7 @@ This tool lets an annotator review the exported OOP/orientation crop pack on the
 
 ## Start
 
-From `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`:
+From `<repo-root>`:
 
 ```bash
 ../sarcgraph-env/bin/python scripts/annotate_oop_pack.py --config configs/default.yaml

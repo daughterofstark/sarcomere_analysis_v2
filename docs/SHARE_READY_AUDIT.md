@@ -4,20 +4,26 @@ This audit checks repository hygiene before GitHub sharing. It does not delete f
 
 ## Summary
 
-- Safe to push as-is: `False`
+- Safe to push Git repository: `True`
+- Safe to share local folder/archive as-is: `False`
+- Tracked files inspected: `218`
 - Large files >25 MB: `2`
+- Tracked large files >25 MB: `0`
 - Raw microscopy files present under repo: `0`
 - Raw microscopy files tracked by git: `0`
 - Zip files present: `3`
-- Local absolute path hits: `199`
-- Private marker hits: `160`
+- Zip files tracked by git: `0`
+- Results files tracked by git: `0`
+- Local absolute path hits: `185`
+- Tracked local absolute path hits: `0`
+- Private marker hits: `158`
+- Tracked private/path leakage hits: `0`
 
 ## Recommended Exclusions
 
-- Keep large files over 25 MB out of GitHub unless intentionally using Git LFS.
-- Keep generated zip/review packs local unless intentionally shared outside the code repository.
-- Replace or document local absolute paths before publishing public documentation.
-- Review private marker hits before sharing.
+- Keep generated zip/review packs local and ignored unless intentionally shared outside the code repository.
+- Local absolute paths remain in ignored/local outputs; do not share a folder archive as-is.
+- Private/path-leakage hits remain in ignored/local outputs; keep those outputs out of GitHub.
 
 ## Safe To Commit
 

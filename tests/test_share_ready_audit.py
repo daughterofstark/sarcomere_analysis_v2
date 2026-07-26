@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import sarcomere_analysis.share_ready_audit as share_ready
 from sarcomere_analysis.share_ready_audit import (
     build_share_ready_audit,
     check_gitignore_patterns,
@@ -123,8 +124,8 @@ def test_script_can_write_outputs_and_markdown(tmp_path: Path) -> None:
     assert paths["txt"].exists()
     assert paths["markdown"].exists()
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["mode"] == "share_ready_audit"
-    assert "Safe to push as-is" in paths["markdown"].read_text(encoding="utf-8")
-    assert audit["safe_to_push_as_is"] is True
+    assert "Safe to push Git repository" in paths["markdown"].read_text(encoding="utf-8")
+    assert audit["safe_to_push_git"] is True
 
 
 def test_audit_does_not_modify_existing_files(tmp_path: Path) -> None:
@@ -137,3 +138,29 @@ def test_audit_does_not_modify_existing_files(tmp_path: Path) -> None:
     run_share_ready_audit(tmp_path, output_directory=tmp_path / "out", docs_directory=tmp_path / "docs")
 
     assert table.read_bytes() == before
+
+
+def test_tracked_local_path_hits_reported_separately(tmp_path: Path, monkeypatch) -> None:
+    write_gitignore(tmp_path / ".gitignore")
+    marker = "/Users/" + "medhasharma"
+    readme = tmp_path / "README.md"
+    readme.write_text(f"{marker}/private/path\n", encoding="utf-8")
+    monkeypatch.setattr(share_ready, "tracked_files", lambda _root: [Path("README.md")])
+
+    audit = build_share_ready_audit(tmp_path)
+
+    assert audit["tracked_local_absolute_path_hit_count"] == 1
+    assert audit["safe_to_push_git"] is False
+
+
+def test_untracked_results_block_folder_archive_not_git_push(tmp_path: Path) -> None:
+    write_gitignore(tmp_path / ".gitignore")
+    result = tmp_path / "results" / "tables" / "per_image_metrics.csv"
+    result.parent.mkdir(parents=True, exist_ok=True)
+    result.write_text("image_id,image_oop\n2.007-1,0.1\n", encoding="utf-8")
+
+    audit = build_share_ready_audit(tmp_path)
+
+    assert audit["safe_to_push_git"] is True
+    assert audit["safe_to_share_folder_archive"] is False
+    assert audit["untracked_local_result_archive_leakage_count"] >= 1

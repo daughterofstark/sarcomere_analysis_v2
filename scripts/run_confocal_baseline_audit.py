@@ -14,7 +14,7 @@ from sarcomere_analysis.confocal_intake import run_confocal_baseline_audit
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a non-destructive baseline audit on confocal pilot images.")
     parser.add_argument("--config", default="configs/default.yaml")
-    parser.add_argument("--confocal-root", default="/Users/medhasharma/sarcomere_tools/Confocal")
+    parser.add_argument("--confocal-root", default="/path/to/local/confocal")
     parser.add_argument("--output-dir")
     parser.add_argument("--write-previews", action="store_true")
     args = parser.parse_args()

@@ -5,7 +5,7 @@
 Run commands from:
 
 ```bash
-/Users/medhasharma/sarcomere_tools/sarcomere-analysis
+<repo-root>
 ```
 
 Use the project environment:

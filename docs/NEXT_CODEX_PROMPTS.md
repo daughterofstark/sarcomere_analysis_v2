@@ -2,7 +2,7 @@
 
 ## Prompt A: QC Preview Gallery/Index Only
 
-Continue in `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`.
+Continue in `<repo-root>`.
 
 Task: implement a QC preview gallery/index only. Create a lightweight HTML or CSV index that links existing per-image preview PNGs and key per-image QC metrics. Do not modify algorithms, thresholds, schemas, or generated scientific metrics.
 
@@ -16,7 +16,7 @@ Do not implement FIJI validation, stats, benchmarking, ML, segmentation, publica
 
 ## Prompt B: FIJI Validation Harness Design/Implementation
 
-Continue in `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`.
+Continue in `<repo-root>`.
 
 Task: design and implement a FIJI/manual validation harness for sarcomere spacing only. Use existing output tables and external annotation files. Do not tune the spacing scaffold.
 
@@ -31,7 +31,7 @@ Do not implement clinical stats, donor-level aggregation, benchmarking, ML, segm
 
 ## Prompt C: Per-Image To Per-Donor Feature Aggregation
 
-Continue in `/Users/medhasharma/sarcomere_tools/sarcomere-analysis`.
+Continue in `<repo-root>`.
 
 Task: implement per-image to per-donor feature aggregation after validation scaffolding exists. Aggregate only already-computed image-level metrics and QC counts; do not create new biological interpretations.
 
