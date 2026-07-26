@@ -1,6 +1,10 @@
 # Raw microscopy data and local inputs
 *.tif
 *.tiff
+*.czi
+*.lif
+*.nd2
+*.lsm
 data/raw/
 raw/
 images/
@@ -14,6 +18,7 @@ results/provenance/
 results/**/*.npz
 results/**/cache/
 *.npz
+*.zip
 
 # Python environments and caches
 .venv/
