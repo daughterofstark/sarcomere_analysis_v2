@@ -129,6 +129,75 @@ def write_confocal_summaries(tmp_path: Path) -> None:
             "spacing_status": "not_computed_in_microns_confocal_pixel_size_unknown",
         },
     )
+    write_json(
+        root / "confocal_metadata" / "confocal_metadata_summary.json",
+        {
+            "image_count": 11,
+            "pixel_size_available_count": 11,
+            "pixel_size_missing_count": 0,
+            "unique_pixel_sizes_um": [
+                {"pixel_size_x_um": 0.055514003, "pixel_size_y_um": 0.055514003, "image_count": 3},
+                {"pixel_size_x_um": 0.061064999, "pixel_size_y_um": 0.061064999, "image_count": 5},
+                {"pixel_size_x_um": 0.081420004, "pixel_size_y_um": 0.081420004, "image_count": 3},
+            ],
+            "pixel_sizes_differ_across_images": True,
+            "widefield_calibration_used": False,
+            "spacing_policy": "Spacing in microns must use per-image confocal calibration only; widefield calibration is never used as fallback.",
+        },
+    )
+    write_json(
+        root / "confocal_spacing_audit" / "confocal_spacing_summary.json",
+        {
+            "mode": "confocal_calibrated_spacing_audit",
+            "image_count": 11,
+            "calibrated_image_count": 11,
+            "widefield_calibration_used": False,
+            "candidate_patch_count": 2330,
+            "valid_spacing_patch_count_selected": 1047,
+            "valid_spacing_fraction_selected": 0.4494,
+            "selected_spacing_um_summary": {
+                "median": 1.6654,
+                "iqr": 0.3664,
+                "min": 1.5266,
+                "max": 2.3871,
+            },
+            "selected_failure_reason_counts": {"ok": 1047, "low_periodicity_confidence": 662, "no_local_peak": 621},
+            "special_image_summaries": [
+                {
+                    "confocal_image_id": "5138",
+                    "filename": "5138.tif",
+                    "candidate_patch_count": 309,
+                    "spacing_valid_patch_count_selected": 150,
+                    "spacing_valid_fraction_selected": 0.4854,
+                    "selected_median_spacing_um": 2.0355,
+                },
+                {
+                    "confocal_image_id": "6052-CLEAR_STRIPES",
+                    "filename": "6052-CLEAR_STRIPES.tif",
+                    "candidate_patch_count": 281,
+                    "spacing_valid_patch_count_selected": 105,
+                    "spacing_valid_fraction_selected": 0.3737,
+                    "selected_median_spacing_um": 2.1095,
+                },
+                {
+                    "confocal_image_id": "3112",
+                    "filename": "3112.tif",
+                    "candidate_patch_count": 93,
+                    "spacing_valid_patch_count_selected": 32,
+                    "spacing_valid_fraction_selected": 0.3441,
+                    "selected_median_spacing_um": 2.2206,
+                },
+                {
+                    "confocal_image_id": "7028",
+                    "filename": "7028.tif",
+                    "candidate_patch_count": 598,
+                    "spacing_valid_patch_count_selected": 406,
+                    "spacing_valid_fraction_selected": 0.6789,
+                    "selected_median_spacing_um": 1.6488,
+                },
+            ],
+        },
+    )
 
 
 def test_handles_missing_optional_summaries(tmp_path: Path) -> None:
@@ -136,7 +205,7 @@ def test_handles_missing_optional_summaries(tmp_path: Path) -> None:
 
     assert report["source_summary_presence"]["baseline"] is False
     assert report["confocal_dataset_intake"]["image_count"] is None
-    assert report["final_confocal_pilot_classification"] == "selective_region_analysis_feasible_exploratory_needs_manual_review"
+    assert report["final_confocal_pilot_classification"] == "selective_region_oop_and_spacing_feasible_exploratory_needs_manual_review"
 
 
 def test_includes_baseline_transfer_audit(tmp_path: Path) -> None:
@@ -169,12 +238,51 @@ def test_includes_same_grid_oop_selected_vs_all_result(tmp_path: Path) -> None:
     assert same_grid["positive_examples"]["5138"]["selected_region_median_oop_128"] == 0.8391
 
 
+def test_report_includes_calibration_summary(tmp_path: Path) -> None:
+    write_confocal_summaries(tmp_path)
+    report = build_confocal_pilot_report(report_config(tmp_path))
+
+    calibration = report["per_image_calibration"]
+    assert calibration["pixel_size_available_count"] == 11
+    assert calibration["pixel_size_missing_count"] == 0
+    assert calibration["pixel_sizes_differ_across_images"] is True
+    assert calibration["widefield_calibration_used"] is False
+
+
+def test_report_includes_spacing_audit_summary(tmp_path: Path) -> None:
+    write_confocal_summaries(tmp_path)
+    report = build_confocal_pilot_report(report_config(tmp_path))
+
+    spacing = report["calibrated_selected_region_spacing"]
+    assert spacing["valid_spacing_patch_count_selected"] == 1047
+    assert spacing["selected_spacing_um_summary"]["median"] == 1.6654
+    assert spacing["special_image_results"]["5138"]["selected_median_spacing_um"] == 2.0355
+
+
+def test_report_classifies_confocal_spacing_as_promising_exploratory(tmp_path: Path) -> None:
+    write_confocal_summaries(tmp_path)
+    report = build_confocal_pilot_report(report_config(tmp_path))
+
+    assert report["calibrated_selected_region_spacing"]["status"] == "promising_exploratory_manual_review_needed"
+    assert report["comparison_to_widefield"]["confocal_selected_region_spacing"] == "substantially_more_promising_exploratory"
+    assert report["final_confocal_pilot_classification"] == "selective_region_oop_and_spacing_feasible_exploratory_needs_manual_review"
+
+
+def test_report_still_says_manual_validation_needed(tmp_path: Path) -> None:
+    write_confocal_summaries(tmp_path)
+    report = build_confocal_pilot_report(report_config(tmp_path))
+
+    assert "manual review" in report["answer_to_natalia"]["statement"]
+    assert any("manual" in claim for claim in report["claims_not_allowed"])
+
+
 def test_includes_allowed_and_not_allowed_claims(tmp_path: Path) -> None:
     write_confocal_summaries(tmp_path)
     report = build_confocal_pilot_report(report_config(tmp_path))
 
     assert any("moderate selective mask is plausible" in claim for claim in report["claims_allowed"])
-    assert any("Spacing in microns is measured" in claim for claim in report["claims_not_allowed"])
+    assert any("Per-image confocal calibration" in claim for claim in report["claims_allowed"])
+    assert any("Confocal spacing is biologically validated" in claim for claim in report["claims_not_allowed"])
 
 
 def test_output_json_serializable(tmp_path: Path) -> None:

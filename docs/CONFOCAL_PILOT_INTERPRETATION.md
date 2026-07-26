@@ -40,36 +40,69 @@ This report consolidates existing confocal pilot outputs only. It does not chang
 - 3112: {'confocal_image_id': '3112', 'filename': '3112.tif', 'total_patches': 961, 'candidate_patch_count': 93, 'candidate_patch_fraction': 0.0967741935483871, 'selected_region_median_oop_128': 0.6833980237614709, 'selected_region_iqr_oop_128': 0.13792176827289793, 'all_region_median_oop_128': 0.6762861735361223, 'all_region_iqr_oop_128': 0.2181148761385916, 'selected_vs_all_oop_difference_128': 0.007111850225348548, 'selected_region_median_orientation_valid_pixels_128': 1754.0, 'all_region_median_orientation_valid_pixels_128': 523.0, 'selected_region_median_coherence_128': 0.7174859642982483, 'all_region_median_coherence_128': 0.6760668754577637, 'expected_positive_example': False, 'noted_complex_example': True, 'interpretation_flag': 'review_needed'}
 - 7028: {'confocal_image_id': '7028', 'filename': '7028.tif', 'total_patches': 961, 'candidate_patch_count': 598, 'candidate_patch_fraction': 0.6222684703433923, 'selected_region_median_oop_128': 0.825695890684641, 'selected_region_iqr_oop_128': 0.08936761438382235, 'all_region_median_oop_128': 0.8025646684852366, 'all_region_iqr_oop_128': 0.12591401092193388, 'selected_vs_all_oop_difference_128': 0.023131222199404444, 'selected_region_median_orientation_valid_pixels_128': 2902.0, 'all_region_median_orientation_valid_pixels_128': 2636.0, 'selected_region_median_coherence_128': 0.6960753798484802, 'all_region_median_coherence_128': 0.6842988729476929, 'expected_positive_example': False, 'noted_complex_example': False, 'interpretation_flag': 'broad_candidate_fraction_review_needed'}
 
-## 5. Answer To Natalia
+## 5. Per-Image Calibration
 
-Yes, selective confident-region analysis appears feasible on the confocal images. Analysing candidate striated regions gives cleaner OOP/coherence summaries than analysing all signal, but this remains exploratory and needs visual/manual review before biological claims.
+- Images with parseable pixel size metadata: 11/11
+- Missing pixel size metadata: 0
+- Unique pixel sizes: [{'pixel_size_x_um': 0.055514003, 'pixel_size_y_um': 0.055514003, 'image_count': 3}, {'pixel_size_x_um': 0.061064999, 'pixel_size_y_um': 0.061064999, 'image_count': 5}, {'pixel_size_x_um': 0.081420004, 'pixel_size_y_um': 0.081420004, 'image_count': 3}]
+- Pixel sizes differ across images: True
+- Widefield calibration used: False
+- Policy: Spacing in microns must use per-image confocal calibration only; widefield calibration is never used as fallback.
 
-## 6. Calibration And Spacing
+## 6. Calibrated Selected-Region Spacing
 
-- Confocal pixel size: `unknown`
-- Spacing in microns reported: False
-- No spacing in microns is reported because confocal pixel calibration is unknown. Spacing may become feasible later only if pixel calibration and clear Z-discs are available.
+- Status: `promising_exploratory_manual_review_needed`
+- Moderate candidate patches evaluated: 2330
+- Valid selected-region spacing patches: 1047
+- Valid selected-region fraction: 0.4493562231759657
+- Selected spacing summary: {'median': 1.6654200997220219, 'iqr': 0.3663901147295394, 'min': 1.5266249808484875, 'max': 2.387102142934898}
+- 5138: {'confocal_image_id': '5138', 'filename': '5138.tif', 'pixel_size_um': 0.0814200039504986, 'total_patches': 961, 'candidate_patch_count': 309, 'spacing_valid_patch_count_all': 150, 'spacing_valid_patch_count_selected': 150, 'spacing_valid_fraction_selected': 0.4854368932038835, 'selected_median_spacing_um': 2.035500098762465, 'selected_iqr_spacing_um': 0.24426001185149593, 'selected_median_spacing_px': 25.0, 'selected_median_spacing_confidence': 0.20175147683178785, 'expected_positive_example': True, 'noted_complex_example': False, 'interpretation_flag': 'exploratory_spacing_yield_review_needed'}
+- 6052-CLEAR_STRIPES: {'confocal_image_id': '6052-CLEAR_STRIPES', 'filename': '6052-CLEAR_STRIPES.tif', 'pixel_size_um': 0.0555140033240674, 'total_patches': 961, 'candidate_patch_count': 281, 'spacing_valid_patch_count_all': 105, 'spacing_valid_patch_count_selected': 105, 'spacing_valid_fraction_selected': 0.3736654804270463, 'selected_median_spacing_um': 2.109532126314561, 'selected_iqr_spacing_um': 0.3885980232684716, 'selected_median_spacing_px': 38.0, 'selected_median_spacing_confidence': 0.2295464691353175, 'expected_positive_example': True, 'noted_complex_example': False, 'interpretation_flag': 'exploratory_spacing_yield_review_needed'}
+- 3112: {'confocal_image_id': '3112', 'filename': '3112.tif', 'pixel_size_um': 0.0555140033240674, 'total_patches': 961, 'candidate_patch_count': 93, 'spacing_valid_patch_count_all': 32, 'spacing_valid_patch_count_selected': 32, 'spacing_valid_fraction_selected': 0.34408602150537637, 'selected_median_spacing_um': 2.220560132962696, 'selected_iqr_spacing_um': 0.5135045307476238, 'selected_median_spacing_px': 40.0, 'selected_median_spacing_confidence': 0.20913114797403726, 'expected_positive_example': False, 'noted_complex_example': True, 'interpretation_flag': 'exploratory_spacing_yield_review_needed'}
+- 7028: {'confocal_image_id': '7028', 'filename': '7028.tif', 'pixel_size_um': 0.0610649992339395, 'total_patches': 961, 'candidate_patch_count': 598, 'spacing_valid_patch_count_all': 406, 'spacing_valid_patch_count_selected': 406, 'spacing_valid_fraction_selected': 0.6789297658862876, 'selected_median_spacing_um': 1.6487549793163665, 'selected_iqr_spacing_um': 0.12212999846787898, 'selected_median_spacing_px': 27.0, 'selected_median_spacing_confidence': 0.3155916246830236, 'expected_positive_example': False, 'noted_complex_example': False, 'interpretation_flag': 'exploratory_spacing_yield_review_needed'}
 
-## 7. Next Recommended Steps
+## 7. Comparison To Widefield
 
-- Ask Natalia for confocal pixel size or Leica metadata if available.
-- Manually review moderate overlays for 5138, 6052-CLEAR_STRIPES, 3112, and 7028.
+- Widefield spacing: `extremely_low_yield_exploratory`
+- Confocal selected-region spacing: `substantially_more_promising_exploratory`
+- Likely reasons: ['improved confocal image quality', 'per-image calibration', 'selective-region analysis restricted to confident striation candidates']
+- Confocal selected-region spacing is substantially more promising than widefield spacing, likely reflecting image quality, calibration, and region selection.
+
+## 8. Answer To Natalia
+
+Yes, selective confident-region analysis appears feasible on the confocal images. Analysing candidate striated regions gives cleaner OOP/coherence summaries than analysing all signal, and calibrated selected-region spacing now has substantial exploratory yield. Both remain exploratory and need visual/manual review before biological claims.
+
+## 9. Calibration And Spacing
+
+- Confocal pixel size: `[{'pixel_size_x_um': 0.055514003, 'pixel_size_y_um': 0.055514003, 'image_count': 3}, {'pixel_size_x_um': 0.061064999, 'pixel_size_y_um': 0.061064999, 'image_count': 5}, {'pixel_size_x_um': 0.081420004, 'pixel_size_y_um': 0.081420004, 'image_count': 3}]`
+- Spacing in microns reported: True
+- Per-image confocal calibration is available and was used for the exploratory spacing audit. Spacing remains manually unvalidated and should not be treated as a biological endpoint yet.
+
+## 10. Next Recommended Steps
+
+- Manually review moderate candidate overlays and valid spacing overlays for 5138, 6052-CLEAR_STRIPES, 3112, and 7028.
+- Check whether the selected valid spacing patches correspond to true visible Z-disc intervals.
 - Optionally create a small confocal annotation pack.
 - Only after review, consider a confocal-specific validated configuration.
 - Do not merge confocal thresholds into the widefield default configuration.
 
-## 8. Allowed Claims
+## 11. Allowed Claims
 
 - The confocal transfer pilot processed all available confocal images.
 - The existing widefield QC gate did not transfer unchanged to confocal images.
 - The moderate selective mask is plausible for visual review.
 - Selected regions show higher OOP/coherence than all regions in the current same-grid audit.
+- Per-image confocal calibration was extracted successfully.
+- Selected-region confocal spacing produced substantial valid exploratory yield.
+- Confocal spacing is promising for visual/manual review.
 - Selective-region analysis appears feasible but remains exploratory.
 
-## 9. Claims Not Allowed
+## 12. Claims Not Allowed
 
 - Confocal OOP is biologically validated.
+- Confocal spacing is biologically validated.
 - The moderate mask is a final Z-disc or striation segmentation.
-- Spacing in microns is measured from the confocal images.
+- Spacing differences across images are biological.
+- Spacing should be reported without manual or visual validation.
 - Disease or healthy conclusions can be drawn from this pilot.
 - Widefield conclusions are overturned by this confocal pilot.

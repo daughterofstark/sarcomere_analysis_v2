@@ -41,6 +41,8 @@ def build_confocal_pilot_report(cfg: dict[str, Any]) -> dict[str, Any]:
         "sensitivity": read_json(root / "confocal_striation_sensitivity" / "confocal_striation_sensitivity_summary.json"),
         "selective": read_json(root / "confocal_selective_analysis" / "confocal_selective_summary.json"),
         "same_grid_oop": read_json(root / "confocal_same_grid_oop" / "confocal_same_grid_oop_summary.json"),
+        "metadata": read_json(root / "confocal_metadata" / "confocal_metadata_summary.json"),
+        "spacing": read_json(root / "confocal_spacing_audit" / "confocal_spacing_summary.json"),
     }
     report = {
         "mode": "confocal_pilot_interpretation",
@@ -48,12 +50,15 @@ def build_confocal_pilot_report(cfg: dict[str, Any]) -> dict[str, Any]:
         "baseline_transfer_audit": baseline_transfer_audit(sources),
         "selective_confident_striation_mask": selective_confident_striation_mask(sources),
         "same_grid_selected_region_oop": same_grid_selected_region_oop(sources),
+        "per_image_calibration": per_image_calibration(sources),
+        "calibrated_selected_region_spacing": calibrated_selected_region_spacing(sources),
+        "comparison_to_widefield": comparison_to_widefield(sources),
         "answer_to_natalia": answer_to_natalia(),
         "calibration_and_spacing": calibration_and_spacing(sources),
         "next_recommended_steps": next_recommended_steps(),
         "claims_allowed": claims_allowed(),
         "claims_not_allowed": claims_not_allowed(),
-        "final_confocal_pilot_classification": "selective_region_analysis_feasible_exploratory_needs_manual_review",
+        "final_confocal_pilot_classification": "selective_region_oop_and_spacing_feasible_exploratory_needs_manual_review",
         "source_summary_presence": {key: value is not None for key, value in sources.items()},
     }
     return json_safe(report)
@@ -149,30 +154,99 @@ def answer_to_natalia() -> dict[str, Any]:
         "statement": (
             "Yes, selective confident-region analysis appears feasible on the confocal images. "
             "Analysing candidate striated regions gives cleaner OOP/coherence summaries than analysing all signal, "
-            "but this remains exploratory and needs visual/manual review before biological claims."
+            "and calibrated selected-region spacing now has substantial exploratory yield. "
+            "Both remain exploratory and need visual/manual review before biological claims."
+        ),
+    }
+
+
+def per_image_calibration(sources: dict[str, dict[str, Any] | None]) -> dict[str, Any]:
+    metadata = sources.get("metadata") or {}
+    return {
+        "image_count": metadata.get("image_count"),
+        "pixel_size_available_count": metadata.get("pixel_size_available_count"),
+        "pixel_size_missing_count": metadata.get("pixel_size_missing_count"),
+        "unique_pixel_sizes_um": metadata.get("unique_pixel_sizes_um"),
+        "pixel_sizes_differ_across_images": metadata.get("pixel_sizes_differ_across_images"),
+        "widefield_calibration_used": metadata.get("widefield_calibration_used"),
+        "spacing_policy": metadata.get("spacing_policy"),
+        "interpretation": (
+            "Per-image confocal calibration was extracted for all images; pixel sizes differ across images, so spacing must use per-image calibration only."
+            if metadata
+            else "Confocal metadata calibration summary missing."
+        ),
+    }
+
+
+def calibrated_selected_region_spacing(sources: dict[str, dict[str, Any] | None]) -> dict[str, Any]:
+    spacing = sources.get("spacing") or {}
+    selected_summary = spacing.get("selected_spacing_um_summary") or {}
+    special = spacing.get("special_image_summaries") or []
+    return {
+        "status": "promising_exploratory_manual_review_needed" if spacing else "missing",
+        "candidate_patch_count": spacing.get("candidate_patch_count"),
+        "valid_spacing_patch_count_selected": spacing.get("valid_spacing_patch_count_selected"),
+        "valid_spacing_fraction_selected": spacing.get("valid_spacing_fraction_selected"),
+        "selected_spacing_um_summary": selected_summary,
+        "special_image_results": {
+            "5138": first_matching_image(special, "5138"),
+            "6052_CLEAR_STRIPES": first_matching_image(special, "6052"),
+            "3112": first_matching_image(special, "3112"),
+            "7028": first_matching_image(special, "7028"),
+        },
+        "failure_reason_counts_selected": spacing.get("selected_failure_reason_counts"),
+        "widefield_calibration_used": spacing.get("widefield_calibration_used"),
+        "interpretation": (
+            "Calibrated spacing in selected confocal candidate regions produced substantial exploratory yield, but remains manually unvalidated."
+            if spacing
+            else "Confocal spacing audit summary missing."
+        ),
+    }
+
+
+def comparison_to_widefield(sources: dict[str, dict[str, Any] | None]) -> dict[str, Any]:
+    spacing = sources.get("spacing") or {}
+    return {
+        "widefield_spacing": "extremely_low_yield_exploratory",
+        "confocal_selected_region_spacing": (
+            "substantially_more_promising_exploratory"
+            if spacing and spacing.get("valid_spacing_patch_count_selected", 0)
+            else "not_available"
+        ),
+        "likely_reasons": [
+            "improved confocal image quality",
+            "per-image calibration",
+            "selective-region analysis restricted to confident striation candidates",
+        ],
+        "interpretation": (
+            "Confocal selected-region spacing is substantially more promising than widefield spacing, likely reflecting image quality, calibration, and region selection."
         ),
     }
 
 
 def calibration_and_spacing(sources: dict[str, dict[str, Any] | None]) -> dict[str, Any]:
     baseline = sources.get("baseline") or {}
-    same_grid = sources.get("same_grid_oop") or {}
+    metadata = sources.get("metadata") or {}
+    spacing = sources.get("spacing") or {}
     return {
-        "confocal_pixel_size_um": "unknown",
+        "confocal_pixel_size_um": metadata.get("unique_pixel_sizes_um") or "unknown",
         "baseline_spacing_status": baseline.get("spacing_calibration_status"),
-        "same_grid_spacing_status": same_grid.get("spacing_status"),
-        "spacing_in_microns_reported": False,
+        "same_grid_spacing_status": (sources.get("same_grid_oop") or {}).get("spacing_status"),
+        "spacing_in_microns_reported": bool(spacing),
+        "spacing_audit_status": (sources.get("spacing") or {}).get("mode"),
         "interpretation": (
-            "No spacing in microns is reported because confocal pixel calibration is unknown. "
-            "Spacing may become feasible later only if pixel calibration and clear Z-discs are available."
+            "Per-image confocal calibration is available and was used for the exploratory spacing audit. "
+            "Spacing remains manually unvalidated and should not be treated as a biological endpoint yet."
+            if metadata and spacing
+            else "Spacing in microns requires per-image confocal calibration and manual/visual review."
         ),
     }
 
 
 def next_recommended_steps() -> list[str]:
     return [
-        "Ask Natalia for confocal pixel size or Leica metadata if available.",
-        "Manually review moderate overlays for 5138, 6052-CLEAR_STRIPES, 3112, and 7028.",
+        "Manually review moderate candidate overlays and valid spacing overlays for 5138, 6052-CLEAR_STRIPES, 3112, and 7028.",
+        "Check whether the selected valid spacing patches correspond to true visible Z-disc intervals.",
         "Optionally create a small confocal annotation pack.",
         "Only after review, consider a confocal-specific validated configuration.",
         "Do not merge confocal thresholds into the widefield default configuration.",
@@ -185,6 +259,9 @@ def claims_allowed() -> list[str]:
         "The existing widefield QC gate did not transfer unchanged to confocal images.",
         "The moderate selective mask is plausible for visual review.",
         "Selected regions show higher OOP/coherence than all regions in the current same-grid audit.",
+        "Per-image confocal calibration was extracted successfully.",
+        "Selected-region confocal spacing produced substantial valid exploratory yield.",
+        "Confocal spacing is promising for visual/manual review.",
         "Selective-region analysis appears feasible but remains exploratory.",
     ]
 
@@ -192,8 +269,10 @@ def claims_allowed() -> list[str]:
 def claims_not_allowed() -> list[str]:
     return [
         "Confocal OOP is biologically validated.",
+        "Confocal spacing is biologically validated.",
         "The moderate mask is a final Z-disc or striation segmentation.",
-        "Spacing in microns is measured from the confocal images.",
+        "Spacing differences across images are biological.",
+        "Spacing should be reported without manual or visual validation.",
         "Disease or healthy conclusions can be drawn from this pilot.",
         "Widefield conclusions are overturned by this confocal pilot.",
     ]
@@ -212,6 +291,8 @@ def render_text_report(report: dict[str, Any]) -> str:
     baseline = report["baseline_transfer_audit"]
     mask = report["selective_confident_striation_mask"]
     oop = report["same_grid_selected_region_oop"]
+    calibration = report["per_image_calibration"]
+    spacing = report["calibrated_selected_region_spacing"]
     lines = [
         "Confocal Pilot Interpretation",
         "",
@@ -233,6 +314,17 @@ def render_text_report(report: dict[str, Any]) -> str:
         f"- patch rows: {oop.get('same_grid_patch_rows')}",
         f"- selected-vs-all summary: {oop.get('selected_vs_all_oop_summary')}",
         "",
+        "Per-image calibration:",
+        f"- available/missing: {calibration.get('pixel_size_available_count')}/{calibration.get('pixel_size_missing_count')}",
+        f"- pixel sizes differ: {calibration.get('pixel_sizes_differ_across_images')}",
+        f"- widefield calibration used: {calibration.get('widefield_calibration_used')}",
+        "",
+        "Calibrated selected-region spacing:",
+        f"- status: {spacing.get('status')}",
+        f"- valid selected patches: {spacing.get('valid_spacing_patch_count_selected')}",
+        f"- valid fraction: {spacing.get('valid_spacing_fraction_selected')}",
+        f"- spacing summary: {spacing.get('selected_spacing_um_summary')}",
+        "",
         f"Answer to Natalia: {report['answer_to_natalia']['statement']}",
         "",
         f"Calibration/spacing: {report['calibration_and_spacing']['interpretation']}",
@@ -250,6 +342,9 @@ def render_markdown_report(report: dict[str, Any]) -> str:
     baseline = report["baseline_transfer_audit"]
     mask = report["selective_confident_striation_mask"]
     oop = report["same_grid_selected_region_oop"]
+    per_image_cal = report["per_image_calibration"]
+    spacing = report["calibrated_selected_region_spacing"]
+    widefield = report["comparison_to_widefield"]
     calibration = report["calibration_and_spacing"]
     lines = [
         "# Confocal Pilot Interpretation",
@@ -294,23 +389,51 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- 3112: {format_value(oop.get('complex_example_3112'))}",
         f"- 7028: {format_value(oop.get('review_needed_7028'))}",
         "",
-        "## 5. Answer To Natalia",
+        "## 5. Per-Image Calibration",
+        "",
+        f"- Images with parseable pixel size metadata: {format_value(per_image_cal.get('pixel_size_available_count'))}/{format_value(per_image_cal.get('image_count'))}",
+        f"- Missing pixel size metadata: {format_value(per_image_cal.get('pixel_size_missing_count'))}",
+        f"- Unique pixel sizes: {format_value(per_image_cal.get('unique_pixel_sizes_um'))}",
+        f"- Pixel sizes differ across images: {format_value(per_image_cal.get('pixel_sizes_differ_across_images'))}",
+        f"- Widefield calibration used: {format_value(per_image_cal.get('widefield_calibration_used'))}",
+        f"- Policy: {format_value(per_image_cal.get('spacing_policy'))}",
+        "",
+        "## 6. Calibrated Selected-Region Spacing",
+        "",
+        f"- Status: `{spacing.get('status')}`",
+        f"- Moderate candidate patches evaluated: {format_value(spacing.get('candidate_patch_count'))}",
+        f"- Valid selected-region spacing patches: {format_value(spacing.get('valid_spacing_patch_count_selected'))}",
+        f"- Valid selected-region fraction: {format_value(spacing.get('valid_spacing_fraction_selected'))}",
+        f"- Selected spacing summary: {format_value(spacing.get('selected_spacing_um_summary'))}",
+        f"- 5138: {format_value(nested_get(spacing, ['special_image_results', '5138']))}",
+        f"- 6052-CLEAR_STRIPES: {format_value(nested_get(spacing, ['special_image_results', '6052_CLEAR_STRIPES']))}",
+        f"- 3112: {format_value(nested_get(spacing, ['special_image_results', '3112']))}",
+        f"- 7028: {format_value(nested_get(spacing, ['special_image_results', '7028']))}",
+        "",
+        "## 7. Comparison To Widefield",
+        "",
+        f"- Widefield spacing: `{widefield.get('widefield_spacing')}`",
+        f"- Confocal selected-region spacing: `{widefield.get('confocal_selected_region_spacing')}`",
+        f"- Likely reasons: {format_value(widefield.get('likely_reasons'))}",
+        f"- {widefield.get('interpretation')}",
+        "",
+        "## 8. Answer To Natalia",
         "",
         report["answer_to_natalia"]["statement"],
         "",
-        "## 6. Calibration And Spacing",
+        "## 9. Calibration And Spacing",
         "",
         f"- Confocal pixel size: `{calibration.get('confocal_pixel_size_um')}`",
         f"- Spacing in microns reported: {format_value(calibration.get('spacing_in_microns_reported'))}",
         f"- {calibration.get('interpretation')}",
         "",
-        "## 7. Next Recommended Steps",
+        "## 10. Next Recommended Steps",
         "",
     ]
     lines.extend(f"- {item}" for item in report["next_recommended_steps"])
-    lines.extend(["", "## 8. Allowed Claims", ""])
+    lines.extend(["", "## 11. Allowed Claims", ""])
     lines.extend(f"- {claim}" for claim in report["claims_allowed"])
-    lines.extend(["", "## 9. Claims Not Allowed", ""])
+    lines.extend(["", "## 12. Claims Not Allowed", ""])
     lines.extend(f"- {claim}" for claim in report["claims_not_allowed"])
     lines.append("")
     return "\n".join(lines)
