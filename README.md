@@ -16,7 +16,6 @@ Not included: raw image data, generated result tables/previews/review zips, clin
 - [Metric definitions](docs/metric_definitions.md)
 - [Data availability and sharing](docs/DATA_AVAILABILITY_AND_SHARING.md)
 - [Share-ready audit](docs/SHARE_READY_AUDIT.md)
-- [Next Codex prompts](docs/NEXT_CODEX_PROMPTS.md)
 
 ## Data And Paths
 
